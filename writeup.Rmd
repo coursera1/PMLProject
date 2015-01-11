@@ -1,0 +1,16 @@
+---
+title: "Writeup"
+author: "PLI"
+date: "Saturday, January 10, 2015"
+output: html_document
+---
+
+
+# Introduction
+
+# Machine learnign algorithm
+
+# Cross validation
+
+# Out of sample error
+
