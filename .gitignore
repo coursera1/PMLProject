@@ -1,3 +1,7 @@
 .Rproj.user
 .Rhistory
 .RData
+pml-testing.csv
+pml-training.csv
+rf-model-with-window.RData
+rf-model.RData
