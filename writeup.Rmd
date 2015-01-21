@@ -4,13 +4,165 @@ author: "PLI"
 date: "Saturday, January 10, 2015"
 output: html_document
 ---
+```{r optionSet, echo=FALSE}
+## Setting global knit options
+knitr::opts_chunk$set(echo=TRUE, message=FALSE, eval=TRUE, fig.width=12, fig.heigth=12)
+````
+
 
 
 # Introduction
 
-# Machine learnign algorithm
+The goal of this assignment is to predict the manner people perform barbell lifts. We will use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants who were asked to perform this activity correctly and incorrectly. The outcome is recorded in the *classe* variable of the data set.
+
+The training data will be use to train and validate the model and the test data to answer the second part of the assignement which consist of doing prediction on 20 samples.
+
+* Training: https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+* Testing: https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+Thanks to:
+Ugulino, W.; Cardador, D.; Vega, K.; Velloso, E.; Milidiu, R.; Fuks, H. Wearable Computing: Accelerometers' Data Classification of Body Postures and Movements. Proceedings of 21st Brazilian Symposium on Artificial Intelligence. Advances in Artificial Intelligence - SBIA 2012. In: Lecture Notes in Computer Science. , pp. 52-61. Curitiba, PR: Springer Berlin / Heidelberg, 2012. ISBN 978-3-642-34458-9. DOI: 10.1007/978-3-642-34459-6_6. 
+
+Read more: http://groupware.les.inf.puc-rio.br/har#sbia_paper_section#ixzz3OXdW9y00
+
+We will start by loading the required libraries.
+````{r setLibrary}
+suppressMessages(library(plyr))
+suppressMessages(library(dplyr))
+suppressMessages(library(knitr))
+suppressMessages(library(ggplot2))
+suppressMessages(library(caret))
+# Set seed for reproducibility
+set.seed(32343)
+```
+
+# Reading and cleaning the data
+
+ We will first load the training data, and transform strings *NA*, *#DIV/0!* and empty string by NAs.
+
+
+```{r dataRead}
+## Take care of #DIV/0! and NA when reading data
+data <- read.csv("pml-training.csv", na.strings=c("NA", "#DIV/0!", ""), header=TRUE)
+````
+
+ We will then suppress useless variables: *row numbers*, *user names* and variables with *timestamp* as these should not be related to the outcome.
+ 
+ From a quick explorations of the data we see that:
+ 
+ * *new_window* and *num_window* seem to be related to some summarization variables
+ * a lot of variables are full of NAs and are related with the preceding finding
+ 
+ We decide to remove the two *window* variables and also the ones with more then 90% NAs.
+ 
+```{r cleanData}
+## Suppress row numbers, user_name and timestamps because they should be uncorrelated to the outcome
+data <- select(data, -X, -user_name, -contains("timestamp"))
+
+str(data[data$new_window=="no",1:20])
+str(data[data$new_window=="yes",1:20])
+
+## Suppress *window* variable
+#data <- select(data, -contains("window"))
+
+## Remove columns with NA > 90% total
+NaIndex<-(colSums(is.na(data)) < 0.9*nrow(data))
+data<-data[,NaIndex]
+dim(data)
+````
+Here is a plot of the 1000 random samples of 10 random variables names and the outcome.
+
+```{r pairsPlot}
+# Take 1000 samples
+l<-dim(data)[1]
+i<-sample(x=1:(l), size = 1000)
+# Take 10 variables
+w<-dim(data)[2]
+j<-sample(x=1:(w), size = 10)
+# Add classe variable for plot
+s<-cbind(data[i,c(j,55)])
+pal<-palette()
+c<-pal[as.numeric(s$classe)]
+
+pairs(s, col=c)
+```
+
+
+# Machine learning algorithm
+
+We divide the training data in a train partition and a validation partition and define the trainControl method to be "cv".
+
+```{r preProcess}
+
+
+## Create partition
+inTrain = createDataPartition(data$classe, p = 3/4)[[1]]
+training = data[ inTrain,]
+validation = data[-inTrain,]
+
+tCtrl<-trainControl(method = "cv")
+
+````
+We have tried multiple training algorithms: rpart, pca, glm and finaly opted for random forest as it is the one with the best results. As we've reduced the dimensions of the problem from 155 to 53 variables the time required to train the model on a HP EliteBook 8560p is less than one hour.
+To save computation time for the writing, we've decided to save the model on disk and reload it if required instead of recomputing it.
+
+````{r rf}
+modelFilename<-"rf-model.RData"
+if (file.exists(modelFilename)) {
+        load(file = modelFilename)
+        } else {
+                ## Time is 3234 sec
+                modelFit1<-train(training$classe ~ .,
+                                 method="rf",
+                                 preProcess = c("center", "scale"),
+                                 data=training,
+                                 trainControl = tCtrl)
+                save(modelFit1, file=modelFilename)
+                }
+````
+
+The confusion matrix is shown in the next section.
+Here are the other learning algorithms applied but not used eventhough we could have used them in an "ensemble" implementation.
+
+
+
+````{r rpart, eval=FALSE}
+modelFit <- train(training$classe ~ ., data=training, 
+                  method="rpart",
+                  preProcess = c("center", "scale"),
+                  trainControl = tCtrl)
+
+confusionMatrix(validation$classe, predict(modelFit,newdata=validation))
+```
+
+````{r pca-rf, eval=FALSE}
+train2<-select(training, -classe)
+preProc<-preProcess(train2, method="pca", thresh = 0.99)
+trainPC<-predict(preProc, train2)
+modelFit2<-train(training$classe ~ .,
+                 method="rf",
+                 data=trainPC)
+test2<-select(validation, -classe)
+testPC<-predict(preProc, test2)
+confusionMatrix(validation$classe, predict(modelFit2,testPC))
+````
+
+````{r glm, eval=FALSE}
+modelFit <- train(classe ~ ., data=training, 
+                  method="glm",
+                  preProcess = c("center", "scale"))
+
+predictions <- predict(modelFit,newdata=validation)
+confusionMatrix(validation$classe, predictions)
+```
 
 # Cross validation
+
+
+```{r validation}
+predictions <- predict(modelFit1,newdata=validation)
+confusionMatrix(validation$classe, predictions)
+```
 
 # Out of sample error
 
