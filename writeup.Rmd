@@ -1,7 +1,7 @@
 ---
 title: "Writeup"
 author: "PLI"
-date: "Saturday, January 10, 2015"
+date: "Saturday, January 24, 2015"
 output: html_document
 ---
 ```{r optionSet, echo=FALSE}
@@ -15,7 +15,7 @@ knitr::opts_chunk$set(echo=TRUE, message=FALSE, eval=TRUE, fig.width=12, fig.hei
 
 The goal of this assignment is to predict the manner people perform barbell lifts. We will use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants who were asked to perform this activity correctly and incorrectly. The outcome is recorded in the *classe* variable of the data set.
 
-The training data will be use to train and validate the model and the test data to answer the second part of the assignement which consist of doing prediction on 20 samples.
+The training data will be use to train and validate the model and the test data to answer the second part of the assignment which consist of doing prediction on 20 samples.
 
 * Training: https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
 * Testing: https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
@@ -53,7 +53,7 @@ data <- read.csv("pml-training.csv", na.strings=c("NA", "#DIV/0!", ""), header=T
  * *new_window* and *num_window* seem to be related to some summarization variables
  * a lot of variables are full of NAs and are related with the preceding finding
  
- We decide to remove the two *window* variables and also the ones with more then 90% NAs.
+ We decide to remove the two *window* variables and also the ones with more than 90% NAs.
  
 ```{r cleanData}
 ## Suppress row numbers, user_name and timestamps because they should be uncorrelated to the outcome
@@ -63,7 +63,7 @@ str(data[data$new_window=="no",1:20])
 str(data[data$new_window=="yes",1:20])
 
 ## Suppress *window* variable
-#data <- select(data, -contains("window"))
+data <- select(data, -contains("window"))
 
 ## Remove columns with NA > 90% total
 NaIndex<-(colSums(is.na(data)) < 0.9*nrow(data))
@@ -80,7 +80,7 @@ i<-sample(x=1:(l), size = 1000)
 w<-dim(data)[2]
 j<-sample(x=1:(w), size = 10)
 # Add classe variable for plot
-s<-cbind(data[i,c(j,55)])
+s<-cbind(data[i,c(j,53)])
 pal<-palette()
 c<-pal[as.numeric(s$classe)]
 
@@ -88,9 +88,9 @@ pairs(s, col=c)
 ```
 
 
-# Machine learning algorithm
+# Machine learning algorithm: Random Forest
 
-We divide the training data in a train partition and a validation partition and define the trainControl method to be "cv".
+We divide the training data in a train partition and a validation partition and define the trainControl method to be "oob" (out of bag).
 
 ```{r preProcess}
 
@@ -100,18 +100,21 @@ inTrain = createDataPartition(data$classe, p = 3/4)[[1]]
 training = data[ inTrain,]
 validation = data[-inTrain,]
 
-tCtrl<-trainControl(method = "cv")
+# TrainControl setting
+# tCtrl<-trainControl(method = "cv")
+
+tCtrl <- trainControl(method = "oob", number = 4, verboseIter = TRUE)
 
 ````
 We have tried multiple training algorithms: rpart, pca, glm and finaly opted for random forest as it is the one with the best results. As we've reduced the dimensions of the problem from 155 to 53 variables the time required to train the model on a HP EliteBook 8560p is less than one hour.
 To save computation time for the writing, we've decided to save the model on disk and reload it if required instead of recomputing it.
 
 ````{r rf}
-modelFilename<-"rf-model.RData"
+modelFilename<-"rf-model-4oob.RData"
 if (file.exists(modelFilename)) {
         load(file = modelFilename)
         } else {
-                ## Time is 3234 sec
+                ## Time is 3234 sec for cv
                 modelFit1<-train(training$classe ~ .,
                                  method="rf",
                                  preProcess = c("center", "scale"),
@@ -121,18 +124,25 @@ if (file.exists(modelFilename)) {
                 }
 ````
 
-The confusion matrix is shown in the next section.
-Here are the other learning algorithms applied but not used eventhough we could have used them in an "ensemble" implementation.
+The confusion matrix on the training set is an estimate of the out of sample error.
 
+```{r oosEstimate}
+predictions <- predict(modelFit1,newdata=training)
+confusionMatrix(training$classe, predictions)
+```
 
+As always, this estimate is optimistic since the model has been constructed on this same data set.
+
+# Other algorithms tested
+
+Here are the other learning algorithms applied but not used because their accuracies weren't good enough.
+We could have also used them in an "ensemble" implementation but the accuracy of the random forest algorithm was enough in this case.
 
 ````{r rpart, eval=FALSE}
 modelFit <- train(training$classe ~ ., data=training, 
                   method="rpart",
                   preProcess = c("center", "scale"),
                   trainControl = tCtrl)
-
-confusionMatrix(validation$classe, predict(modelFit,newdata=validation))
 ```
 
 ````{r pca-rf, eval=FALSE}
@@ -144,7 +154,6 @@ modelFit2<-train(training$classe ~ .,
                  data=trainPC)
 test2<-select(validation, -classe)
 testPC<-predict(preProc, test2)
-confusionMatrix(validation$classe, predict(modelFit2,testPC))
 ````
 
 ````{r glm, eval=FALSE}
@@ -153,16 +162,51 @@ modelFit <- train(classe ~ ., data=training,
                   preProcess = c("center", "scale"))
 
 predictions <- predict(modelFit,newdata=validation)
-confusionMatrix(validation$classe, predictions)
 ```
 
 # Cross validation
 
+We now apply the model to the validation data set to validate the out of sample estimate:
 
 ```{r validation}
 predictions <- predict(modelFit1,newdata=validation)
 confusionMatrix(validation$classe, predictions)
 ```
 
-# Out of sample error
+# Testing sample
+
+Finally, we apply this model to the testing set to make our predictions ...
+
+```{r dataReadTest}
+## Take care of #DIV/0! and NA when reading test
+test <- read.csv("pml-testing.csv", na.strings=c("NA", "#DIV/0!", ""), header=TRUE)
+
+test <- select(test, -X, -user_name, -contains("timestamp"))
+
+## Suppress *window* variable
+test <- select(test, -contains("window"))
+
+## Remove columns with NA > 90% total
+NaIndex<-(colSums(is.na(test)) < 0.9*nrow(test))
+test<-test[,NaIndex]
+dim(test)
+
+predictions <- predict(modelFit1,newdata=test[,-53])
+
+predictions
+````
+
+
+```{r submission, eval=FALSE, echo=FALSE}
+# Just to make the files for submissions
+pml_write_files = function(x){
+  n = length(x)
+  for(i in 1:n){
+    filename = paste0("problem_id_",i,".txt")
+    write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+  }
+}
+setwd("./Submission/")
+pml_write_files(as.character(predictions))
+```
 
