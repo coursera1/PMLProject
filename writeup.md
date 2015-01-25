@@ -225,7 +225,7 @@ confusionMatrix(training$classe, predictions)
 ## Balanced Accuracy      0.9991   0.9986   0.9978   0.9996   0.9997
 ```
 
-As always, this estimate is optimistic (accuracy of 0.9983 in this case) as we will see in the cross-validation section since the model has been constructed on this same data set.
+As always, this estimate is optimistic (accuracy of 99.83% in this case) as we will see in the cross-validation section since the model has been constructed on this same data set.
 
 # Other algorithms tested
 
@@ -305,7 +305,7 @@ confusionMatrix(validation$classe, predictions)
 ## Balanced Accuracy      0.9993   0.9987   0.9979   0.9984   0.9999
 ```
 
-The accuracy estimate is now 0.9982 with a confidence interval wider than the one on the training set as expected.
+The accuracy estimate is now 99.82% (0.18% error rate) with a confidence interval wider than the one on the training set as expected.
 
 # Testing sample
 

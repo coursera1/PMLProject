@@ -131,7 +131,7 @@ predictions <- predict(modelFit1,newdata=training)
 confusionMatrix(training$classe, predictions)
 ```
 
-As always, this estimate is optimistic (accuracy of 0.9983 in this case) as we will see in the cross-validation section since the model has been constructed on this same data set.
+As always, this estimate is optimistic (accuracy of 99.83% in this case) as we will see in the cross-validation section since the model has been constructed on this same data set.
 
 # Other algorithms tested
 
@@ -173,7 +173,7 @@ predictions <- predict(modelFit1,newdata=validation)
 confusionMatrix(validation$classe, predictions)
 ```
 
-The accuracy estimate is now 0.9982 with a confidence interval wider than the one on the training set as expected.
+The accuracy estimate is now 99.82% (0.18% error rate) with a confidence interval wider than the one on the training set as expected.
 
 # Testing sample
 
