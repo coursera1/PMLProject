@@ -1,7 +1,7 @@
 ---
 title: "Writeup"
 author: "PLI"
-date: "Saturday, January 10, 2015"
+date: "Saturday, January 24, 2015"
 output: html_document
 ---
 
@@ -12,7 +12,7 @@ output: html_document
 
 The goal of this assignment is to predict the manner people perform barbell lifts. We will use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants who were asked to perform this activity correctly and incorrectly. The outcome is recorded in the *classe* variable of the data set.
 
-The training data will be use to train and validate the model and the test data to answer the second part of the assignement which consist of doing prediction on 20 samples.
+The training data will be use to train and validate the model and the test data to answer the second part of the assignment which consist of doing prediction on 20 samples.
 
 * Training: https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
 * Testing: https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
@@ -52,7 +52,7 @@ data <- read.csv("pml-training.csv", na.strings=c("NA", "#DIV/0!", ""), header=T
  * *new_window* and *num_window* seem to be related to some summarization variables
  * a lot of variables are full of NAs and are related with the preceding finding
  
- We decide to remove the two *window* variables and also the ones with more then 90% NAs.
+ We decide to remove the two *window* variables and also the ones with more than 90% NAs.
  
 
 ```r
@@ -116,7 +116,7 @@ str(data[data$new_window=="yes",1:20])
 
 ```r
 ## Suppress *window* variable
-#data <- select(data, -contains("window"))
+data <- select(data, -contains("window"))
 
 ## Remove columns with NA > 90% total
 NaIndex<-(colSums(is.na(data)) < 0.9*nrow(data))
@@ -125,7 +125,7 @@ dim(data)
 ```
 
 ```
-## [1] 19622    55
+## [1] 19622    53
 ```
 Here is a plot of the 1000 random samples of 10 random variables names and the outcome.
 
@@ -138,7 +138,7 @@ i<-sample(x=1:(l), size = 1000)
 w<-dim(data)[2]
 j<-sample(x=1:(w), size = 10)
 # Add classe variable for plot
-s<-cbind(data[i,c(j,55)])
+s<-cbind(data[i,c(j,53)])
 pal<-palette()
 c<-pal[as.numeric(s$classe)]
 
@@ -148,9 +148,9 @@ pairs(s, col=c)
 ![plot of chunk pairsPlot](figure/pairsPlot-1.png) 
 
 
-# Machine learning algorithm
+# Machine learning algorithm: Random Forest
 
-We divide the training data in a train partition and a validation partition and define the trainControl method to be "cv".
+We divide the training data in a train partition and a validation partition and define the trainControl method to be "oob" (out of bag) which is appropriate for random forest.
 
 
 ```r
@@ -159,18 +159,21 @@ inTrain = createDataPartition(data$classe, p = 3/4)[[1]]
 training = data[ inTrain,]
 validation = data[-inTrain,]
 
-tCtrl<-trainControl(method = "cv")
+# TrainControl setting
+# tCtrl<-trainControl(method = "cv")
+
+tCtrl <- trainControl(method = "oob", number = 4, verboseIter = TRUE)
 ```
 We have tried multiple training algorithms: rpart, pca, glm and finaly opted for random forest as it is the one with the best results. As we've reduced the dimensions of the problem from 155 to 53 variables the time required to train the model on a HP EliteBook 8560p is less than one hour.
 To save computation time for the writing, we've decided to save the model on disk and reload it if required instead of recomputing it.
 
 
 ```r
-modelFilename<-"rf-model.RData"
+modelFilename<-"rf-model-4oob.RData"
 if (file.exists(modelFilename)) {
         load(file = modelFilename)
         } else {
-                ## Time is 3234 sec
+                ## Time is 3234 sec for cv
                 modelFit1<-train(training$classe ~ .,
                                  method="rf",
                                  preProcess = c("center", "scale"),
@@ -180,10 +183,54 @@ if (file.exists(modelFilename)) {
                 }
 ```
 
-The confusion matrix is shown in the next section.
-Here are the other learning algorithms applied but not used eventhough we could have used them in an "ensemble" implementation.
+The confusion matrix on the training set gives us an estimate of the out of sample error.
 
 
+```r
+predictions <- predict(modelFit1,newdata=training)
+confusionMatrix(training$classe, predictions)
+```
+
+```
+## Confusion Matrix and Statistics
+## 
+##           Reference
+## Prediction    A    B    C    D    E
+##          A 4183    1    0    0    1
+##          B    7 2839    2    0    0
+##          C    0    5 2561    1    0
+##          D    0    0    5 2407    0
+##          E    0    0    3    0 2703
+## 
+## Overall Statistics
+##                                           
+##                Accuracy : 0.9983          
+##                  95% CI : (0.9975, 0.9989)
+##     No Information Rate : 0.2847          
+##     P-Value [Acc > NIR] : < 2.2e-16       
+##                                           
+##                   Kappa : 0.9979          
+##  Mcnemar's Test P-Value : NA              
+## 
+## Statistics by Class:
+## 
+##                      Class: A Class: B Class: C Class: D Class: E
+## Sensitivity            0.9983   0.9979   0.9961   0.9996   0.9996
+## Specificity            0.9998   0.9992   0.9995   0.9996   0.9998
+## Pos Pred Value         0.9995   0.9968   0.9977   0.9979   0.9989
+## Neg Pred Value         0.9993   0.9995   0.9992   0.9999   0.9999
+## Prevalence             0.2847   0.1933   0.1747   0.1636   0.1837
+## Detection Rate         0.2842   0.1929   0.1740   0.1635   0.1837
+## Detection Prevalence   0.2843   0.1935   0.1744   0.1639   0.1839
+## Balanced Accuracy      0.9991   0.9986   0.9978   0.9996   0.9997
+```
+
+As always, this estimate is optimistic (accuracy of 0.9983 in this case) as we will see in the cross-validation section since the model has been constructed on this same data set.
+
+# Other algorithms tested
+
+Here are the other learning algorithms applied but not used because their accuracies weren't good enough.
+We could have also used them in an "ensemble" implementation but the accuracy of the random forest algorithm was enough to make excellent prediction in this case.
 
 
 ```r
@@ -191,8 +238,6 @@ modelFit <- train(training$classe ~ ., data=training,
                   method="rpart",
                   preProcess = c("center", "scale"),
                   trainControl = tCtrl)
-
-confusionMatrix(validation$classe, predict(modelFit,newdata=validation))
 ```
 
 
@@ -205,7 +250,6 @@ modelFit2<-train(training$classe ~ .,
                  data=trainPC)
 test2<-select(validation, -classe)
 testPC<-predict(preProc, test2)
-confusionMatrix(validation$classe, predict(modelFit2,testPC))
 ```
 
 
@@ -215,11 +259,11 @@ modelFit <- train(classe ~ ., data=training,
                   preProcess = c("center", "scale"))
 
 predictions <- predict(modelFit,newdata=validation)
-confusionMatrix(validation$classe, predictions)
 ```
 
 # Cross validation
 
+We now apply the model to the validation data set to cross-validate the out of sample error estimate:
 
 
 ```r
@@ -233,33 +277,71 @@ confusionMatrix(validation$classe, predictions)
 ##           Reference
 ## Prediction    A    B    C    D    E
 ##          A 1395    0    0    0    0
-##          B    8  939    1    1    0
-##          C    0    0  855    0    0
-##          D    0    0    2  802    0
-##          E    0    0    0    2  899
+##          B    2  947    0    0    0
+##          C    0    2  852    1    0
+##          D    0    0    3  801    0
+##          E    0    0    0    1  900
 ## 
 ## Overall Statistics
 ##                                           
-##                Accuracy : 0.9971          
-##                  95% CI : (0.9952, 0.9984)
-##     No Information Rate : 0.2861          
+##                Accuracy : 0.9982          
+##                  95% CI : (0.9965, 0.9992)
+##     No Information Rate : 0.2849          
 ##     P-Value [Acc > NIR] : < 2.2e-16       
 ##                                           
-##                   Kappa : 0.9964          
+##                   Kappa : 0.9977          
 ##  Mcnemar's Test P-Value : NA              
 ## 
 ## Statistics by Class:
 ## 
 ##                      Class: A Class: B Class: C Class: D Class: E
-## Sensitivity            0.9943   1.0000   0.9965   0.9963   1.0000
-## Specificity            1.0000   0.9975   1.0000   0.9995   0.9995
-## Pos Pred Value         1.0000   0.9895   1.0000   0.9975   0.9978
-## Neg Pred Value         0.9977   1.0000   0.9993   0.9993   1.0000
-## Prevalence             0.2861   0.1915   0.1750   0.1642   0.1833
-## Detection Rate         0.2845   0.1915   0.1743   0.1635   0.1833
+## Sensitivity            0.9986   0.9979   0.9965   0.9975   1.0000
+## Specificity            1.0000   0.9995   0.9993   0.9993   0.9998
+## Pos Pred Value         1.0000   0.9979   0.9965   0.9963   0.9989
+## Neg Pred Value         0.9994   0.9995   0.9993   0.9995   1.0000
+## Prevalence             0.2849   0.1935   0.1743   0.1637   0.1835
+## Detection Rate         0.2845   0.1931   0.1737   0.1633   0.1835
 ## Detection Prevalence   0.2845   0.1935   0.1743   0.1639   0.1837
-## Balanced Accuracy      0.9971   0.9987   0.9983   0.9979   0.9998
+## Balanced Accuracy      0.9993   0.9987   0.9979   0.9984   0.9999
 ```
 
-# Out of sample error
+The accuracy estimate is now 0.9982 with a confidence interval wider than the one on the training set as expected.
+
+# Testing sample
+
+Finally, we apply this model to the testing set to make our predictions for the second part of the assignment ...
+
+
+```r
+## Take care of #DIV/0! and NA when reading test
+test <- read.csv("pml-testing.csv", na.strings=c("NA", "#DIV/0!", ""), header=TRUE)
+
+test <- select(test, -X, -user_name, -contains("timestamp"))
+
+## Suppress *window* variable
+test <- select(test, -contains("window"))
+
+## Remove columns with NA > 90% total
+NaIndex<-(colSums(is.na(test)) < 0.9*nrow(test))
+test<-test[,NaIndex]
+dim(test)
+```
+
+```
+## [1] 20 53
+```
+
+```r
+predictions <- predict(modelFit1,newdata=test[,-53])
+
+predictions
+```
+
+```
+##  [1] B A B A A E D B A A B C B A E E A B B B
+## Levels: A B C D E
+```
+
+
+
 
