@@ -90,7 +90,7 @@ pairs(s, col=c)
 
 # Machine learning algorithm: Random Forest
 
-We divide the training data in a train partition and a validation partition and define the trainControl method to be "oob" (out of bag).
+We divide the training data in a train partition and a validation partition and define the trainControl method to be "oob" (out of bag) which is appropriate for random forest.
 
 ```{r preProcess}
 
@@ -124,19 +124,19 @@ if (file.exists(modelFilename)) {
                 }
 ````
 
-The confusion matrix on the training set is an estimate of the out of sample error.
+The confusion matrix on the training set gives us an estimate of the out of sample error.
 
 ```{r oosEstimate}
 predictions <- predict(modelFit1,newdata=training)
 confusionMatrix(training$classe, predictions)
 ```
 
-As always, this estimate is optimistic since the model has been constructed on this same data set.
+As always, this estimate is optimistic (accuracy of 0.9983 in this case) as we will see in the cross-validation section since the model has been constructed on this same data set.
 
 # Other algorithms tested
 
 Here are the other learning algorithms applied but not used because their accuracies weren't good enough.
-We could have also used them in an "ensemble" implementation but the accuracy of the random forest algorithm was enough in this case.
+We could have also used them in an "ensemble" implementation but the accuracy of the random forest algorithm was enough to make excellent prediction in this case.
 
 ````{r rpart, eval=FALSE}
 modelFit <- train(training$classe ~ ., data=training, 
@@ -166,16 +166,18 @@ predictions <- predict(modelFit,newdata=validation)
 
 # Cross validation
 
-We now apply the model to the validation data set to validate the out of sample estimate:
+We now apply the model to the validation data set to cross-validate the out of sample error estimate:
 
 ```{r validation}
 predictions <- predict(modelFit1,newdata=validation)
 confusionMatrix(validation$classe, predictions)
 ```
 
+The accuracy estimate is now 0.9982 with a confidence interval wider than the one on the training set as expected.
+
 # Testing sample
 
-Finally, we apply this model to the testing set to make our predictions ...
+Finally, we apply this model to the testing set to make our predictions for the second part of the assignment ...
 
 ```{r dataReadTest}
 ## Take care of #DIV/0! and NA when reading test
